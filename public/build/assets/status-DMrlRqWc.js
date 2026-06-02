@@ -1,0 +1,1 @@
+import{j as r}from"./app-DR-K6x8A.js";import{B as o}from"./badge-Mt6jGYod.js";/* empty css            */import"./utils-ByRMbfVE.js";import"./index-BYwvv9YS.js";function u({server:t}){return r.jsx(o,{variant:t.status_color,children:t.status})}export{u as default};

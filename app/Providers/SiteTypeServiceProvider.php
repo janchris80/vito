@@ -35,6 +35,15 @@ class SiteTypeServiceProvider extends ServiceProvider
         $this->wordpress();
     }
 
+    private function cloudflareTunnelField(): DynamicField
+    {
+        return DynamicField::make('cloudflare_tunnel')
+            ->checkbox()
+            ->label('Enable Cloudflare Tunnel')
+            ->description('Route traffic through Cloudflare Tunnel (creates CNAME DNS + tunnel ingress)')
+            ->default(false);
+    }
+
     private function php(): void
     {
         RegisterSiteType::make(PHPSite::id())
@@ -63,6 +72,7 @@ class SiteTypeServiceProvider extends ServiceProvider
                     ->checkbox()
                     ->label('Run `composer install --no-dev`')
                     ->default(false),
+                $this->cloudflareTunnelField(),
             ]))
             ->register();
     }
@@ -81,6 +91,7 @@ class SiteTypeServiceProvider extends ServiceProvider
                     ->label('Web Directory')
                     ->placeholder('e.g., public, www, dist (leave empty for root)')
                     ->description('The relative path of your website from /home/vito/your-domain/'),
+                $this->cloudflareTunnelField(),
             ]))
             ->register();
     }
@@ -115,6 +126,7 @@ class SiteTypeServiceProvider extends ServiceProvider
                     ->checkbox()
                     ->label('Run `composer install --no-dev`')
                     ->default(false),
+                $this->cloudflareTunnelField(),
             ]))
             ->register();
         RegisterSiteFeature::make(Laravel::id(), 'modern-deployment')
@@ -158,6 +170,7 @@ class SiteTypeServiceProvider extends ServiceProvider
                     ->text()
                     ->label('Branch')
                     ->default('main'),
+                $this->cloudflareTunnelField(),
             ]))
             ->register();
     }

@@ -1,10 +1,17 @@
+# Determine SSH hostname (GitHub requires ssh.github.com on port 443)
+SSH_HOST="{{ $host }}"
+if [ "$SSH_HOST" = "github.com" ]; then
+    SSH_HOST="ssh.github.com"
+fi
+
 echo "Host {{ $host }}-{{ $key }}
-        Hostname {{ $host }}
+        Port 443
+        Hostname $SSH_HOST
         IdentityFile=~/.ssh/{{ $key }}" >> ~/.ssh/config
 
 chmod 600 ~/.ssh/config
 
-ssh-keyscan -H {{ $host }} >> ~/.ssh/known_hosts
+ssh-keyscan -p 443 -H $SSH_HOST >> ~/.ssh/known_hosts
 
 rm -rf {{ $path }}
 

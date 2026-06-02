@@ -31,4 +31,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'cloudflare' => [
+        'api_token' => env('CLOUDFLARE_API_TOKEN'),
+        'zone_id' => env('CLOUDFLARE_ZONE_ID'),
+        'account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
+        'tunnel_id' => env('CLOUDFLARE_TUNNEL_ID'),
+        'domain' => env('CLOUDFLARE_DOMAIN', 'jcodev.online'),
+    ],
+
 ];

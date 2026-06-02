@@ -84,6 +84,7 @@ class PHPSite extends AbstractSiteType
     {
         return [
             'composer' => isset($input['composer']) && $input['composer'],
+            'cloudflare_tunnel' => $input['cloudflare_tunnel'] ?? false,
         ];
     }
 

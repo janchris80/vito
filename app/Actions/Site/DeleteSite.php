@@ -2,6 +2,7 @@
 
 namespace App\Actions\Site;
 
+use App\Actions\Tunnel\CloudflareTunnel;
 use App\Exceptions\SSHError;
 use App\Models\Service;
 use App\Models\Site;
@@ -20,6 +21,11 @@ class DeleteSite
     public function delete(Site $site, array $input): void
     {
         $this->validate($site, $input);
+
+        // Remove Cloudflare tunnel if enabled
+        if (! empty($site->type_data['cloudflare_tunnel'])) {
+            app(CloudflareTunnel::class)->remove($site);
+        }
 
         /** @var Service $service */
         $service = $site->server->webserver();

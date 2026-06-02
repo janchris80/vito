@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Site;
 
+use App\Actions\Tunnel\CloudflareTunnel;
 use App\Enums\SiteStatus;
 use App\Facades\Notifier;
 use App\Models\ServerLog;
@@ -28,6 +29,12 @@ class CreateJob implements ShouldQueue
                 'status' => SiteStatus::READY,
                 'progress' => 100,
             ]);
+
+            // Setup Cloudflare tunnel if enabled
+            if (! empty($this->site->type_data['cloudflare_tunnel'])) {
+                app(CloudflareTunnel::class)->setup($this->site);
+            }
+
             Notifier::send($this->site, new SiteInstallationSucceed($this->site));
         });
     }

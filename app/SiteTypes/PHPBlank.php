@@ -48,7 +48,9 @@ class PHPBlank extends PHPSite
 
     public function data(array $input): array
     {
-        return [];
+        return [
+            'cloudflare_tunnel' => $input['cloudflare_tunnel'] ?? false,
+        ];
     }
 
     /**
