@@ -10,6 +10,10 @@ class CloudflareTunnel
 {
     private string $apiToken;
 
+    private string $globalApiKey;
+
+    private string $email;
+
     private string $zoneId;
 
     private string $accountId;
@@ -21,6 +25,8 @@ class CloudflareTunnel
     public function __construct()
     {
         $this->apiToken = config('services.cloudflare.api_token', '');
+        $this->globalApiKey = config('services.cloudflare.global_api_key', '');
+        $this->email = config('services.cloudflare.email', '');
         $this->zoneId = config('services.cloudflare.zone_id', '');
         $this->accountId = config('services.cloudflare.account_id', '');
         $this->tunnelId = config('services.cloudflare.tunnel_id', '');
@@ -29,10 +35,10 @@ class CloudflareTunnel
 
     public function isConfigured(): bool
     {
-        return ! empty($this->apiToken)
-            && ! empty($this->zoneId)
+        return ! empty($this->zoneId)
             && ! empty($this->accountId)
-            && ! empty($this->tunnelId);
+            && ! empty($this->tunnelId)
+            && (! empty($this->apiToken) || (! empty($this->globalApiKey) && ! empty($this->email)));
     }
 
     public function setup(Site $site): void
@@ -57,20 +63,35 @@ class CloudflareTunnel
         $this->removeIngressRule($site->domain);
     }
 
-    private function createDnsRecord(string $hostname): void
+    private function dnsHeaders(): array
+    {
+        return [
+            'Authorization' => 'Bearer '.$this->apiToken,
+            'Content-Type' => 'application/json',
+        ];
+    }
+
+    private function tunnelHeaders(): array
+    {
+        return [
+            'X-Auth-Key' => $this->globalApiKey,
+            'X-Auth-Email' => $this->email,
+            'Content-Type' => 'application/json',
+        ];
+    }
+
+    public function createDnsRecord(string $hostname): void
     {
         $tunnelHostname = $this->tunnelId.'.cfargotunnel.com';
 
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-            'Content-Type' => 'application/json',
-        ])->post("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records", [
-            'type' => 'CNAME',
-            'name' => $hostname,
-            'content' => $tunnelHostname,
-            'ttl' => 1,
-            'proxied' => true,
-        ]);
+        $response = Http::withHeaders($this->dnsHeaders())
+            ->post("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records", [
+                'type' => 'CNAME',
+                'name' => $hostname,
+                'content' => $tunnelHostname,
+                'ttl' => 1,
+                'proxied' => true,
+            ]);
 
         if (! $response->successful() || ! $response->json('success')) {
             $error = $response->json('errors.0.message') ?? 'Unknown error';
@@ -92,14 +113,13 @@ class CloudflareTunnel
         Log::info('Cloudflare DNS record created', ['hostname' => $hostname]);
     }
 
-    private function updateDnsRecord(string $hostname, string $tunnelHostname): void
+    public function updateDnsRecord(string $hostname, string $tunnelHostname): void
     {
-        $records = Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-        ])->get("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records", [
-            'type' => 'CNAME',
-            'name' => $hostname,
-        ])->json('result', []);
+        $records = Http::withHeaders(['Authorization' => 'Bearer '.$this->apiToken])
+            ->get("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records", [
+                'type' => 'CNAME',
+                'name' => $hostname,
+            ])->json('result', []);
 
         if (empty($records)) {
             return;
@@ -107,28 +127,25 @@ class CloudflareTunnel
 
         $recordId = $records[0]['id'];
 
-        Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-            'Content-Type' => 'application/json',
-        ])->put("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records/{$recordId}", [
-            'type' => 'CNAME',
-            'name' => $hostname,
-            'content' => $tunnelHostname,
-            'ttl' => 1,
-            'proxied' => true,
-        ]);
+        Http::withHeaders($this->dnsHeaders())
+            ->put("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records/{$recordId}", [
+                'type' => 'CNAME',
+                'name' => $hostname,
+                'content' => $tunnelHostname,
+                'ttl' => 1,
+                'proxied' => true,
+            ]);
 
         Log::info('Cloudflare DNS record updated', ['hostname' => $hostname]);
     }
 
-    private function removeDnsRecord(string $hostname): void
+    public function removeDnsRecord(string $hostname): void
     {
-        $records = Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-        ])->get("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records", [
-            'type' => 'CNAME',
-            'name' => $hostname,
-        ])->json('result', []);
+        $records = Http::withHeaders(['Authorization' => 'Bearer '.$this->apiToken])
+            ->get("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records", [
+                'type' => 'CNAME',
+                'name' => $hostname,
+            ])->json('result', []);
 
         if (empty($records)) {
             return;
@@ -136,21 +153,21 @@ class CloudflareTunnel
 
         $recordId = $records[0]['id'];
 
-        Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-        ])->delete("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records/{$recordId}");
+        Http::withHeaders(['Authorization' => 'Bearer '.$this->apiToken])
+            ->delete("https://api.cloudflare.com/client/v4/zones/{$this->zoneId}/dns_records/{$recordId}");
 
         Log::info('Cloudflare DNS record removed', ['hostname' => $hostname]);
     }
 
-    private function addIngressRule(string $hostname): void
+    public function addIngressRule(string $hostname): void
     {
-        $configResponse = Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-        ])->get("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations");
+        $configResponse = Http::withHeaders($this->tunnelHeaders())
+            ->get("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations");
 
         if (! $configResponse->successful()) {
-            Log::error('Failed to fetch Cloudflare tunnel config');
+            Log::error('Failed to fetch Cloudflare tunnel config', [
+                'error' => $configResponse->json('errors.0.message'),
+            ]);
 
             return;
         }
@@ -170,21 +187,18 @@ class CloudflareTunnel
             ->push([
                 'hostname' => $hostname,
                 'service' => 'http://localhost:80',
-                'originRequest' => [],
             ])
             ->push([
                 'service' => 'http_status:404',
             ])
             ->toArray();
 
-        $updateResponse = Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-            'Content-Type' => 'application/json',
-        ])->put("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations", [
-            'config' => [
-                'ingress' => $newIngress,
-            ],
-        ]);
+        $updateResponse = Http::withHeaders($this->tunnelHeaders())
+            ->put("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations", [
+                'config' => [
+                    'ingress' => $newIngress,
+                ],
+            ]);
 
         if (! $updateResponse->successful() || ! $updateResponse->json('success')) {
             Log::error('Failed to update Cloudflare tunnel config', [
@@ -198,11 +212,10 @@ class CloudflareTunnel
         Log::info('Cloudflare tunnel ingress rule added', ['hostname' => $hostname]);
     }
 
-    private function removeIngressRule(string $hostname): void
+    public function removeIngressRule(string $hostname): void
     {
-        $configResponse = Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-        ])->get("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations");
+        $configResponse = Http::withHeaders($this->tunnelHeaders())
+            ->get("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations");
 
         if (! $configResponse->successful()) {
             return;
@@ -220,15 +233,33 @@ class CloudflareTunnel
             $newIngress[] = ['service' => 'http_status:404'];
         }
 
-        Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiToken,
-            'Content-Type' => 'application/json',
-        ])->put("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations", [
-            'config' => [
-                'ingress' => $newIngress,
-            ],
-        ]);
+        $updateResponse = Http::withHeaders($this->tunnelHeaders())
+            ->put("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations", [
+                'config' => [
+                    'ingress' => $newIngress,
+                ],
+            ]);
 
+        if (! $updateResponse->successful() || ! $updateResponse->json('success')) {
+            Log::error('Failed to remove Cloudflare tunnel ingress rule', [
+                'hostname' => $hostname,
+                'error' => $updateResponse->json('errors.0.message'),
+            ]);
+
+            return;
+        }
         Log::info('Cloudflare tunnel ingress rule removed', ['hostname' => $hostname]);
+    }
+
+    public function getIngressRules(): array
+    {
+        $configResponse = Http::withHeaders($this->tunnelHeaders())
+            ->get("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/cfd_tunnel/{$this->tunnelId}/configurations");
+
+        if (! $configResponse->successful()) {
+            return [];
+        }
+
+        return $configResponse->json('result.config.ingress', []);
     }
 }

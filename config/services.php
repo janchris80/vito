@@ -33,6 +33,8 @@ return [
 
     'cloudflare' => [
         'api_token' => env('CLOUDFLARE_API_TOKEN'),
+        'global_api_key' => env('CLOUDFLARE_GLOBAL_API_KEY'),
+        'email' => env('CLOUDFLARE_EMAIL'),
         'zone_id' => env('CLOUDFLARE_ZONE_ID'),
         'account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
         'tunnel_id' => env('CLOUDFLARE_TUNNEL_ID'),
