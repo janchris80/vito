@@ -72,21 +72,26 @@ class CreateServer
             // create services
             $this->createServices($input);
 
-            // install server
-            dispatch(function (): void {
-                app(InstallServer::class)->run($this->server);
-            })
-                ->catch(function (Throwable $e): void {
-                    $this->server->update([
-                        'status' => ServerStatus::INSTALLATION_FAILED,
-                    ]);
-                    Notifier::send($this->server, new ServerInstallationFailed($this->server));
-                    Log::error('server-installation-error', [
-                        'error' => (string) $e,
-                    ]);
+            // install server (skip for custom — services already exist)
+            if ($this->server->provider !== Custom::id()) {
+                dispatch(function (): void {
+                    app(InstallServer::class)->run($this->server);
                 })
-                ->onQueue('ssh');
-
+                    ->catch(function (Throwable $e): void {
+                        $this->server->update([
+                            'status' => ServerStatus::INSTALLATION_FAILED,
+                        ]);
+                        Notifier::send($this->server, new ServerInstallationFailed($this->server));
+                        Log::error('server-installation-error', [
+                            'error' => (string) $e,
+                        ]);
+                    })
+                    ->onQueue('ssh');
+            } else {
+                $this->server->update([
+                    'status' => ServerStatus::READY,
+                ]);
+            }
             // Ensure we get the default db values in the model
             $this->server->refresh();
 
